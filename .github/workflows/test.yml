@@ -8,14 +8,15 @@ on:
 
 jobs:
   demo:
-    runs-on: ubuntu-latest
+    # Pinned so a new default image cannot change CI behavior unannounced.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Cache Docker image layers (including the baked-in embedding model) so
       # repeat runs skip the slow pip install and model download.
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # `docker buildx bake` does not read .env on its own, so export the pinned
       # versions for the steps below (docker compose reads .env by itself).
@@ -23,7 +24,7 @@ jobs:
         run: grep -E '^[A-Z_]+=' .env >> "$GITHUB_ENV"
 
       - name: Build the app image (cached)
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
           source: .
           files: docker-compose.yml
@@ -36,7 +37,7 @@ jobs:
       # Cache the Couchbase image (about 3 GB) between runs.
       - name: Cache Couchbase image
         id: cb-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/couchbase-image.tar
           key: couchbase-image-${{ hashFiles('.env') }}
