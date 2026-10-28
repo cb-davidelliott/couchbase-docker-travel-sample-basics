@@ -1,0 +1,9 @@
+# Shell scripts run inside Linux containers. Force LF so Windows checkouts
+# (core.autocrlf=true) don't produce "bad interpreter: \r" failures.
+*.sh   text eol=lf
+*.py   text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+.env   text eol=lf

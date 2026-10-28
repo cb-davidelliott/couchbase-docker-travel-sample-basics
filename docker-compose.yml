@@ -1,0 +1,98 @@
+name: couchbase-docker-travel-sample-basics
+
+services:
+  couchbase:
+    image: ${COUCHBASE_IMAGE}
+    hostname: couchbase
+    ports:
+      - "${CB_PORT_UI}:8091"       # Web UI + REST
+      - "${CB_PORT_QUERY}:8093"    # Query (SQL++)
+      - "${CB_PORT_SEARCH}:8094"   # Search (FTS)
+      - "${CB_PORT_KV}:11210"      # KV (SDK data access)
+    volumes:
+      - couchbase-data:/opt/couchbase/var
+    healthcheck:
+      # The web UI page answers (200) as soon as the server is up, both before
+      # and after the cluster is configured. (/pools needs a login afterwards.)
+      test: ["CMD", "curl", "-sf", "http://localhost:8091/ui/index.html"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 15s
+
+  # One-shot setup container: configures the cluster, loads travel-sample,
+  # creates users and indexes, then exits. It reuses the Couchbase image
+  # because that image already contains curl and python3.
+  init:
+    image: ${COUCHBASE_IMAGE}
+    depends_on:
+      couchbase:
+        condition: service_healthy
+    env_file: .env
+    # Run the setup script. If (and only if) it succeeds, drop a "ready" marker
+    # and idle. `docker compose up --wait` then returns once the marker exists,
+    # so it only returns after setup has fully succeeded. If setup fails the
+    # container exits non-zero and `up --wait` reports the error instead.
+    entrypoint: ["/bin/bash", "-c", "/init/setup.sh && touch /tmp/ready && exec sleep infinity"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/ready"]
+      interval: 3s
+      timeout: 3s
+      retries: 3
+      start_period: 20m   # setup can take several minutes on a slow machine
+    stop_grace_period: 1s
+    volumes:
+      - ./init:/init:ro
+    restart: "no"
+
+  # One-shot step: generates a vector embedding for every hotel (locally, with
+  # an open-source model) and builds the vector indexes. Same "ready marker"
+  # pattern as init, so `up --wait` only returns once this has succeeded.
+  embed:
+    build:
+      context: ./app
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+        COUCHBASE_SDK_VERSION: ${COUCHBASE_SDK_VERSION}
+        FASTEMBED_VERSION: ${FASTEMBED_VERSION}
+        EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+    image: couchbase-travel-sample-demo-app
+    depends_on:
+      init:
+        condition: service_healthy
+    env_file: .env
+    working_dir: /app
+    entrypoint: ["/bin/sh", "-c", "python embed.py && touch /tmp/ready && exec sleep infinity"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/ready"]
+      interval: 3s
+      timeout: 3s
+      retries: 3
+      start_period: 30m
+    stop_grace_period: 1s
+    volumes:
+      - ./app:/app:ro
+      - ./init:/init:ro
+    restart: "no"
+
+  # The demos. Not started by `up` (it belongs to the "demo" profile); run it
+  # with `docker compose run --rm app`. It waits for setup to finish first.
+  app:
+    profiles: ["demo"]
+    build:
+      context: ./app
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+        COUCHBASE_SDK_VERSION: ${COUCHBASE_SDK_VERSION}
+        FASTEMBED_VERSION: ${FASTEMBED_VERSION}
+        EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+    image: couchbase-travel-sample-demo-app
+    depends_on:
+      embed:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./app:/app:ro      # edit the demo files and re-run - no rebuild needed
+
+volumes:
+  couchbase-data:

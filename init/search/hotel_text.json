@@ -1,0 +1,69 @@
+{
+  "type": "fulltext-index",
+  "name": "hotel_text",
+  "sourceType": "gocbcore",
+  "sourceName": "travel-sample",
+  "planParams": { "maxPartitionsPerPIndex": 1024, "indexPartitions": 1 },
+  "params": {
+    "doc_config": {
+      "mode": "scope.collection.type_field",
+      "type_field": "type"
+    },
+    "mapping": {
+      "default_mapping": { "enabled": false, "dynamic": false },
+      "default_analyzer": "en",
+      "default_datetime_parser": "dateTimeOptional",
+      "default_field": "_all",
+      "default_type": "_default",
+      "index_dynamic": false,
+      "store_dynamic": false,
+      "type_field": "_type",
+      "types": {
+        "inventory.hotel": {
+          "enabled": true,
+          "dynamic": false,
+          "properties": {
+            "name": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "name", "type": "text", "analyzer": "en", "index": true, "store": true, "include_in_all": true, "include_term_vectors": true } ] },
+            "title": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "title", "type": "text", "analyzer": "en", "index": true, "store": true, "include_in_all": true, "include_term_vectors": true } ] },
+            "description": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "description", "type": "text", "analyzer": "en", "index": true, "store": true, "include_in_all": true, "include_term_vectors": true } ] },
+            "address": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "address", "type": "text", "analyzer": "en", "index": true, "store": true, "include_in_all": true } ] },
+            "city": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "city", "type": "text", "analyzer": "keyword", "index": true, "store": true, "docvalues": true, "include_in_all": true } ] },
+            "state": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "state", "type": "text", "analyzer": "keyword", "index": true, "store": true, "docvalues": true } ] },
+            "country": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "country", "type": "text", "analyzer": "keyword", "index": true, "store": true, "docvalues": true, "include_in_all": true } ] },
+            "free_breakfast": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "free_breakfast", "type": "boolean", "index": true, "store": true, "docvalues": true } ] },
+            "free_parking": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "free_parking", "type": "boolean", "index": true, "store": true, "docvalues": true } ] },
+            "pets_ok": { "enabled": true, "dynamic": false, "fields": [
+              { "name": "pets_ok", "type": "boolean", "index": true, "store": true, "docvalues": true } ] },
+            "reviews": {
+              "enabled": true,
+              "dynamic": false,
+              "properties": {
+                "content": { "enabled": true, "dynamic": false, "fields": [
+                  { "name": "content", "type": "text", "analyzer": "en", "index": true, "store": true, "include_in_all": true, "include_term_vectors": true } ] },
+                "ratings": {
+                  "enabled": true,
+                  "dynamic": false,
+                  "properties": {
+                    "Overall": { "enabled": true, "dynamic": false, "fields": [
+                      { "name": "Overall", "type": "number", "index": true, "store": true, "docvalues": true } ] }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "store": { "indexType": "scorch", "segmentVersion": 16 }
+  },
+  "sourceParams": {}
+}

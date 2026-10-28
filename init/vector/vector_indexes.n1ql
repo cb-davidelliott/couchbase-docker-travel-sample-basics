@@ -1,0 +1,10 @@
+-- Vector indexes built on the hotel embeddings (GSI-based, one statement per line).
+-- These are created by the embed step AFTER the embeddings exist, because
+-- these indexes are "trained" on the data (they learn where the clusters of
+-- similar vectors are) when they are built.
+--
+-- Hyperscale vector index: built for very large vector sets (millions to billions).
+CREATE VECTOR INDEX IF NOT EXISTS idx_hotel_hyperscale ON `travel-sample`.inventory.hotel(embedding VECTOR) WITH {"dimension": 384, "similarity": "COSINE", "description": "IVF,SQ8"};
+-- Composite vector index: a vector plus scalar fields in one index, so filters
+-- (like country) are applied together with the similarity search.
+CREATE INDEX IF NOT EXISTS idx_hotel_composite ON `travel-sample`.inventory.hotel(embedding VECTOR, country, pets_ok, free_breakfast) WITH {"dimension": 384, "similarity": "COSINE", "description": "IVF,SQ8"};

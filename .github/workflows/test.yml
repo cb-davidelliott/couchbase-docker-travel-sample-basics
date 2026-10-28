@@ -1,0 +1,75 @@
+name: test
+
+# Runs the exact flow a customer runs, on every push and pull request, and
+# fails if any step breaks.
+on:
+  push:
+  pull_request:
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # Cache Docker image layers (including the baked-in embedding model) so
+      # repeat runs skip the slow pip install and model download.
+      - uses: docker/setup-buildx-action@v3
+
+      # `docker buildx bake` does not read .env on its own, so export the pinned
+      # versions for the steps below (docker compose reads .env by itself).
+      - name: Load versions from .env
+        run: grep -E '^[A-Z_]+=' .env >> "$GITHUB_ENV"
+
+      - name: Build the app image (cached)
+        uses: docker/bake-action@v6
+        with:
+          source: .
+          files: docker-compose.yml
+          targets: embed
+          set: |
+            *.cache-from=type=gha,scope=app-image
+            *.cache-to=type=gha,scope=app-image,mode=max
+            *.output=type=docker
+
+      # Cache the Couchbase image (about 3 GB) between runs.
+      - name: Cache Couchbase image
+        id: cb-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/couchbase-image.tar
+          key: couchbase-image-${{ hashFiles('.env') }}
+
+      - name: Load or pull the Couchbase image
+        run: |
+          set -a; . ./.env; set +a
+          if [ -f /tmp/couchbase-image.tar ]; then
+            docker load -i /tmp/couchbase-image.tar
+          else
+            docker pull "$COUCHBASE_IMAGE"
+            docker save "$COUCHBASE_IMAGE" -o /tmp/couchbase-image.tar
+          fi
+
+      - name: Start Couchbase, load data, build indexes, create embeddings
+        run: docker compose up -d --wait
+
+      - name: Demo 1 - Key-Value and SQL++
+        run: docker compose run --rm app python kv_and_queries.py
+
+      - name: Demo 2 - Full Text Search
+        run: docker compose run --rm app python search_demo.py
+
+      - name: Demo 3 - Vector search
+        run: docker compose run --rm app python vector_demo.py
+
+      - name: Run all demos (the customer's default command)
+        run: docker compose run --rm app
+
+      - name: Show logs if something failed
+        if: failure()
+        run: docker compose logs --no-color --tail=200
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

@@ -1,0 +1,7 @@
+-- Secondary (GSI) indexes used by the SQL++ demos. One statement per line.
+-- Couchbase's travel-sample already ships with some indexes; these add the
+-- ones our demo queries filter on, so they run in milliseconds.
+CREATE INDEX IF NOT EXISTS idx_airline_country ON `travel-sample`.inventory.airline(country);
+CREATE INDEX IF NOT EXISTS idx_airport_country_city ON `travel-sample`.inventory.airport(country, city);
+CREATE INDEX IF NOT EXISTS idx_hotel_country_city ON `travel-sample`.inventory.hotel(country, city);
+CREATE INDEX IF NOT EXISTS idx_route_source ON `travel-sample`.inventory.route(sourceairport, airlineid);
