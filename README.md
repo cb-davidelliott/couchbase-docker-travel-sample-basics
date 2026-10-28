@@ -154,6 +154,13 @@ This project uses these third-party components, each under its own license:
 
 Couchbase Server Enterprise Edition is used under Couchbase's license terms (see [Versions](#versions)).
 
+### Credits
+
+- **Embedding model.** [`all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) comes from the [Sentence Transformers](https://www.sbert.net/) project. It was fine-tuned from [`nreimers/MiniLM-L6-H384-uncased`](https://huggingface.co/nreimers/MiniLM-L6-H384-uncased), and its model card credits a Hugging Face community week with help from Google's Flax, JAX and Cloud teams. The ONNX build used here is published by [Qdrant](https://huggingface.co/Qdrant/all-MiniLM-L6-v2-onnx) and run with [fastembed](https://github.com/qdrant/fastembed).
+- **Typeface.** [Inter](https://github.com/rsms/inter), copyright The Inter Project Authors, under the SIL Open Font License 1.1 (see `app/static/INTER-LICENSE.txt`).
+- **Sample data.** The `travel-sample` data set is Couchbase's sample data. It is installed by Couchbase Server at startup and is not part of this repository.
+- **Logo and brand.** The Couchbase logo, colors and typeface choices are Couchbase's brand assets.
+
 ### Repository layout
 
 ```
