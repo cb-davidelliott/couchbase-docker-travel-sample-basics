@@ -51,6 +51,12 @@ jobs:
             docker save "$COUCHBASE_IMAGE" -o /tmp/couchbase-image.tar
           fi
 
+      - name: Lint and format check (ruff)
+        run: pipx run ruff==0.17.3 check app && pipx run ruff==0.17.3 format --check app
+
+      - name: Unit tests
+        run: docker compose run --rm --no-deps app python -m unittest discover -s tests -t .
+
       - name: Start Couchbase, load data, build indexes, create embeddings
         run: docker compose up -d --wait
 
@@ -62,6 +68,12 @@ jobs:
 
       - name: Demo 3 - Vector search
         run: docker compose run --rm app python vector_demo.py
+
+      - name: Deep-dive commands
+        run: |
+          docker compose run --rm app python deepdive.py explain 'SELECT name FROM `travel-sample`.inventory.airline WHERE country = "France"'
+          docker compose run --rm app python deepdive.py bench --runs 20
+          docker compose run --rm app python deepdive.py recall
 
       - name: Run all demos (the customer's default command)
         run: docker compose run --rm app

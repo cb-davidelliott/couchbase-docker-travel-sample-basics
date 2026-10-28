@@ -21,6 +21,7 @@ WORKDIR /app
 RUN pip install \
       "couchbase==${COUCHBASE_SDK_VERSION}" \
       "fastembed==${FASTEMBED_VERSION}" \
+      "numpy==2.5.4" \
       "rich==14.2.0" \
       "requests==2.32.5"
 

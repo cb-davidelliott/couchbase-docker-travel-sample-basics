@@ -1,167 +1,205 @@
-"""
-Demo 2: Full Text Search
-========================
+"""Demo 2: Full Text Search.
 
-Couchbase has a built-in Search service (Full Text Search, or "FTS"). It
-understands language: it breaks text into words, handles plurals and
-typos, ranks results by relevance, highlights matches, and counts results
-by category (facets).
+Couchbase has a built-in Search service (Full Text Search, or FTS). It understands
+language: it splits text into words, handles plurals and typos, ranks results by
+relevance, highlights matches and counts results by category (facets).
 
-Search works on an index that the setup step already built for you. You can
-read its definition in  init/search/hotel_text.json  - it tells Couchbase
-which hotel fields to index and how to analyze each one.
+Search works on an index that the setup step already built. Its definition is in
+init/search/hotel_text.json: it says which hotel fields to index and how to analyze
+each one. You query it with the same connection as everything else; it is simply
+another Couchbase service running next to the Data and Query services.
 
-You query it from the Python SDK with the same connection as every other
-demo. No extra search cluster is needed - it is simply another Couchbase
-service running next to the Data and Query services.
-
-Run it on its own with:
     docker compose run --rm app python search_demo.py
 """
-import time
 
 from couchbase.options import SearchOptions
 from couchbase.search import (
-    BooleanQuery, ConjunctionQuery, DisjunctionQuery, HighlightStyle,
-    MatchPhraseQuery, MatchQuery, SearchRequest, TermFacet, TermQuery,
+    BooleanQuery,
+    ConjunctionQuery,
+    DisjunctionQuery,
+    HighlightStyle,
+    MatchPhraseQuery,
+    MatchQuery,
+    SearchQuery,
+    SearchRequest,
+    TermFacet,
+    TermQuery,
 )
 
-from common import (
-    CB_BUCKET, SCOPE, banner, connect, console, keyspace, note, run_query,
-    section, show_table, step, why,
+from cli import run
+from config import TEXT_INDEX
+from framework import Context, Demo, Result, Table
+from timing import Stopwatch
+
+TEXT = "Part 1 · Searching text"
+COMBINING = "Part 2 · Combining conditions, facets and highlighting"
+WITH_SQLPP = "Part 3 · Search and SQL++ together"
+
+HIT_FIELDS = ("name", "city", "country")  # stored fields to return with each hit
+
+DEMO = Demo(
+    title="Demo 2 · Full Text Search",
+    subtitle=f"Language-aware search over hotel descriptions · index: {TEXT_INDEX}",
 )
 
-INDEX = "hotel_text"   # created by init/setup.sh from init/search/hotel_text.json
 
+def hotel_search(
+    ctx: Context,
+    query: SearchQuery,
+    call: str,
+    *,
+    limit: int = 5,
+    facets: dict[str, TermFacet] | None = None,
+    highlight: bool = False,
+) -> Result:
+    """Search the hotel index and package the hits, scores and timing.
 
-def search(scope, query, label, limit=5, show_fields=("name", "city", "country"), **options):
-    """Run one Search query, print the hits with their relevance scores and timings.
-
-    Returns the result so callers can read facets or other extras.
+    Shared by the steps below so each step can focus on the query it demonstrates.
+    `call` is the text shown to the viewer.
     """
-    start = time.perf_counter()
-    result = scope.search(
-        INDEX,
-        SearchRequest.create(query),
-        SearchOptions(limit=limit, fields=list(show_fields), **options),
-    )
-    # The SDK streams results; reading them here is what actually fetches them.
-    rows = list(result)
-    round_trip_ms = (time.perf_counter() - start) * 1000
+    options = {"limit": limit, "fields": list(HIT_FIELDS)}
+    if facets:
+        options["facets"] = facets
+    if highlight:
+        options.update(highlight_style=HighlightStyle.Html, highlight_fields=["description"])
+
+    with Stopwatch() as sw:
+        # Our index lives in the "inventory" scope, so we search through the scope.
+        result = ctx.scope.search(TEXT_INDEX, SearchRequest.create(query), SearchOptions(**options))
+        hits = list(result)  # results stream in as we read them
     total = result.metadata().metrics().total_rows()
 
-    table = []
-    for row in rows:
-        entry = {"score": round(row.score, 3)}
-        entry.update({f: row.fields.get(f) for f in show_fields})
-        table.append(entry)
-    show_table(table, max_rows=limit)
-
-    if options.get("highlight_style"):
-        # Fragments are the snippets of text that matched, with each matching
-        # word wrapped in <mark>...</mark>. Here we show them in bold.
-        console.print("  [bold]Why each hotel matched (highlighted text):[/bold]")
-        for row in rows:
-            snippet = " … ".join(sum((row.fragments or {}).values(), []))
-            snippet = snippet.replace("<mark>", "[bold yellow]").replace("</mark>", "[/bold yellow]")
-            console.print(f"    • {row.fields.get('name')}: {snippet}")
-    console.print(
-        f"  [green]{total} total hit(s)[/green] (showing top {len(rows)})  "
-        f"⏱  round trip [bold green]{round_trip_ms:.1f} ms[/bold green]"
+    # The score is relevance: higher means a better match.
+    rows = [{"score": round(h.score, 3), **{f: h.fields.get(f) for f in HIT_FIELDS}} for h in hits]
+    lines = []
+    if highlight:
+        lines.append("Why each hotel matched:")
+        for hit in hits:
+            snippet = " … ".join(sum((hit.fragments or {}).values(), []))
+            lines.append(f"• {hit.fields['name']}: {snippet}")
+    for name, facet in (result.facets() if facets else {}).items():
+        lines.append(f"{name}: " + ", ".join(f"{t.term} ({t.count})" for t in facet.terms))
+    return Result(
+        statement=call,
+        language="python",
+        tables=[Table(rows, total=total)],
+        lines=lines,
+        timings={"round trip": sw.ms},
     )
-    return result
 
 
-def main():
-    banner("Demo 2 · Full Text Search",
-           "Language-aware search over hotel descriptions  ·  Search index: " + INDEX)
-    cluster = connect()
-    # Our index lives inside the 'inventory' scope, so we search through the scope.
-    scope = cluster.bucket(CB_BUCKET).scope(SCOPE)
-
-    section("Part 1 · Searching text")
-    note("Higher score = more relevant. Scores come from word frequency and rarity (TF-IDF).")
-
-    # ------------------------------------------------------------------ MATCH
-    step('1. Basic match - hotel descriptions mentioning "beach"')
-    console.print('  [dim]MatchQuery("beach", field="description")[/dim]')
-    search(scope, MatchQuery("beach", field="description"), "match")
-    why("A match query analyzes your words (lower-casing, stemming) and ranks by relevance - "
-        "so 'beaches' and 'Beach' also match, and the best matches come first.")
-
-    # ----------------------------------------------------------------- PHRASE
-    step('2. Phrase match - the exact phrase "continental breakfast"')
-    console.print('  [dim]MatchPhraseQuery("continental breakfast", field="description")[/dim]')
-    search(scope, MatchPhraseQuery("continental breakfast", field="description"), "phrase")
-    why("A phrase query requires the words to appear together and in order, "
-        "so it is far more precise than matching each word separately.")
-
-    # ------------------------------------------------------------------ FUZZY
-    step('3. Fuzzy match - a deliberate typo: "beech" instead of "beach"')
-    console.print('  [dim]MatchQuery("beech", field="description", fuzziness=1)[/dim]')
-    search(scope, MatchQuery("beech", field="description", fuzziness=1), "fuzzy")
-    why("Fuzziness tolerates typos (here, one wrong letter), so people still find what "
-        "they meant. Notice the scores are lower than an exact match - Couchbase ranks "
-        "exact hits above approximate ones.")
-
-    # --------------------------------------------------------------- COMPOUND
-    section("Part 2 · Combining conditions, facets and highlighting")
-
-    step("4. Compound query - must / should / must_not, plus a field filter")
-    console.print(
-        '  [dim]must:     description matches "breakfast"  AND  country is "United States"\n'
-        '  should:   description matches "pool"     (nice to have - boosts the score)\n'
-        '  must_not: description matches "motel"    (exclude these)[/dim]'
+@DEMO.step(
+    "match",
+    'Basic match: hotel descriptions mentioning "beach"',
+    section=TEXT,
+    why="A match query analyzes your words (lower-casing, stemming) and ranks by relevance, "
+    "so 'beaches' and 'Beach' also match and the best matches come first.",
+)
+def match(ctx: Context) -> Result:
+    return hotel_search(
+        ctx,
+        MatchQuery("beach", field="description"),
+        'MatchQuery("beach", field="description")',
     )
-    compound = BooleanQuery(
+
+
+@DEMO.step(
+    "phrase",
+    'Phrase match: the exact phrase "continental breakfast"',
+    section=TEXT,
+    why="A phrase query needs the words together and in order, so it is much more precise "
+    "than matching each word separately.",
+)
+def phrase(ctx: Context) -> Result:
+    return hotel_search(
+        ctx,
+        MatchPhraseQuery("continental breakfast", field="description"),
+        'MatchPhraseQuery("continental breakfast", field="description")',
+    )
+
+
+@DEMO.step(
+    "fuzzy",
+    'Fuzzy match: a deliberate typo, "beech" instead of "beach"',
+    section=TEXT,
+    why="Fuzziness tolerates typos (here, one wrong letter) so people still find what they "
+    "meant. The scores are lower than for an exact match: exact hits rank above approximate ones.",
+)
+def fuzzy(ctx: Context) -> Result:
+    return hotel_search(
+        ctx,
+        MatchQuery("beech", field="description", fuzziness=1),
+        'MatchQuery("beech", field="description", fuzziness=1)',
+    )
+
+
+@DEMO.step(
+    "compound",
+    "Compound query: must / should / must_not, plus a field filter",
+    section=COMBINING,
+    why="Real searches mix text relevance with hard filters: must is required, should boosts "
+    "the ranking, must_not excludes. All of it runs in one request to one service.",
+)
+def compound(ctx: Context) -> Result:
+    query = BooleanQuery(
         must=ConjunctionQuery(
             MatchQuery("breakfast", field="description"),
-            TermQuery("United States", field="country"),   # exact value filter
+            TermQuery("United States", field="country"),  # exact-value filter
         ),
-        should=DisjunctionQuery(MatchQuery("pool", field="description")),
-        must_not=DisjunctionQuery(MatchQuery("motel", field="description")),
+        should=DisjunctionQuery(MatchQuery("pool", field="description")),  # boosts the score
+        must_not=DisjunctionQuery(MatchQuery("motel", field="description")),  # excludes
     )
-    search(scope, compound, "compound")
-    why("Real searches mix text relevance with hard filters. must = required, "
-        "should = boosts the ranking, must_not = excluded - all in one request to one service.")
+    call = (
+        "BooleanQuery(\n"
+        '    must=[MatchQuery("breakfast", field="description"),\n'
+        '          TermQuery("United States", field="country")],\n'
+        '    should=[MatchQuery("pool", field="description")],\n'
+        '    must_not=[MatchQuery("motel", field="description")])'
+    )
+    return hotel_search(ctx, query, call)
 
-    # --------------------------------------------------- FACETS + HIGHLIGHTING
-    step('5. Facets and highlighting - "beach" hotels, counted by country and city')
-    console.print('  [dim]facets: TermFacet("country"), TermFacet("city")   highlight: description[/dim]')
-    result = search(
-        scope,
+
+@DEMO.step(
+    "facets",
+    'Facets and highlighting: "beach" hotels counted by country and city',
+    section=COMBINING,
+    why="Facets give you the 'filter by country (count)' sidebar found on travel sites, computed "
+    "in the same request. Highlighting shows why each result matched.",
+)
+def facets_and_highlighting(ctx: Context) -> Result:
+    return hotel_search(
+        ctx,
         MatchQuery("beach", field="description"),
-        "facets",
+        'MatchQuery("beach", field="description")  + TermFacet("country"), TermFacet("city")',
         limit=3,
         facets={"countries": TermFacet("country", 5), "cities": TermFacet("city", 5)},
-        highlight_style=HighlightStyle.Html,
-        highlight_fields=["description"],
+        highlight=True,
     )
-    for name, facet in result.facets().items():
-        counts = ", ".join(f"{t.term} ({t.count})" for t in facet.terms)
-        console.print(f"  [bold]{name}[/bold]: {counts}")
-    why("Facets give you the 'filter by country / city (count)' sidebar you see on shopping and "
-        "travel sites, computed in the same request. Highlighting shows WHY each result matched.")
 
-    # ------------------------------------------------------------ SEARCH + SQL++
-    section("Part 3 · Search and SQL++ together")
-    step("6. The SEARCH() function - full-text relevance inside a SQL++ statement")
-    # NOTE: inside SEARCH() the index name must be fully qualified: bucket.scope.index
-    sql = f"""
-SELECT h.name, h.city, h.pets_ok, SEARCH_SCORE() AS score
-FROM {keyspace('hotel')} AS h
-WHERE SEARCH(h, {{"query": {{"match": "beach", "field": "description"}}}},
-             {{"index": "{CB_BUCKET}.{SCOPE}.{INDEX}"}})
-  AND h.country = "United States"
-  AND h.pets_ok = true
-ORDER BY score DESC
-LIMIT 5"""
-    run_query(cluster, sql, columns=["name", "city", "pets_ok", "score"])
-    why("One statement combines language-aware relevance (SEARCH) with ordinary SQL filters "
-        "(country, pets_ok) and sorting - and you can still JOIN or aggregate the result.")
 
-    console.print("\n[bold green]✔ Demo 2 complete.[/bold green]")
+@DEMO.step(
+    "search-in-sqlpp",
+    "The SEARCH() function: full-text relevance inside SQL++",
+    section=WITH_SQLPP,
+    why="One statement combines language-aware relevance (SEARCH) with ordinary SQL filters and "
+    "sorting, and you can still JOIN or aggregate the result.",
+)
+def search_in_sqlpp(ctx: Context) -> Result:
+    # Inside SEARCH() the index name must be fully qualified: bucket.scope.index
+    index = f"{ctx.settings.bucket}.{ctx.settings.scope}.{TEXT_INDEX}"
+    return ctx.sqlpp(
+        f"""
+        SELECT h.name, h.city, h.pets_ok, SEARCH_SCORE() AS score
+        FROM {ctx.keyspace("hotel")} AS h
+        WHERE SEARCH(h, {{"query": {{"match": "beach", "field": "description"}}}},
+                     {{"index": "{index}"}})
+          AND h.country = "United States"
+          AND h.pets_ok = true
+        ORDER BY score DESC
+        LIMIT 5""",
+        columns=["name", "city", "pets_ok", "score"],
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(run([DEMO]))

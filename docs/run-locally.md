@@ -73,7 +73,7 @@ python embed.py
 Notes and things to adjust:
 
 - **Search REST URL.** `embed.py` calls the Search service on port `8094` over plain HTTP, which suits the local container. On Capella the Search service uses HTTPS (port `18094`) and you must allow your IP address. Alternatively, skip that part and create the `hotel_vector` Search index in the Capella UI by importing [`init/vector/hotel_vector.json`](../init/vector/hotel_vector.json).
-- **Index files.** `embed.py` reads index definitions from `/init/vector/`. Outside Docker, either change those two paths to `../init/vector/...`, or create the indexes by hand by pasting the files into the UI.
+- **Index definition files.** `embed.py` reads them from the folder named by `INIT_DIR` (default `/init`, where Docker mounts it). Outside Docker run `export INIT_DIR=../init` first.
 - **GSI vector indexes** (Hyperscale and Composite) need Couchbase Server 8.0 or later (Capella supports them). Search vector indexes need 7.6 or later.
 - **Different embedding model?** Change the model name and `EMBEDDING_DIMS`, and change `"dims"` in [`hotel_vector.json`](../init/vector/hotel_vector.json) and `"dimension"` in [`vector_indexes.n1ql`](../init/vector/vector_indexes.n1ql) to match. All vectors must come from the same model. See [`app/embeddings.py`](../app/embeddings.py) for OpenAI, Amazon Bedrock and Cohere examples.
 - **Capella certificates.** Capella connection strings start with `couchbases://` (note the `s`). The SDK trusts the Capella certificate automatically.

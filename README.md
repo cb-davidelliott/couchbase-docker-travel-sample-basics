@@ -29,9 +29,9 @@ docker compose up -d --wait
 docker compose run --rm app
 ```
 
-Step 2 takes a few minutes the first time, mostly downloading about 3.6 GB of images (in our test on a fast connection the whole step took about 90 seconds; allow 5–10 minutes on a slower one). It also loads about 60,000 documents and builds the indexes. It prints `Healthy` for each service when everything is ready. Step 3 takes a few seconds and prints a guided walkthrough, with the SQL++ shown next to each result, row counts, timings, and a one-line "why this matters" after each step.
+Step 2 takes a few minutes the first time, mostly downloading about 3.6 GB of images (in our test on a fast connection the whole step took about 90 seconds; allow 5–10 minutes on a slower one). It also loads about 60,000 documents and builds the indexes. It prints `Healthy` for each service when everything is ready.
 
-> **Windows users:** run these commands in PowerShell, Command Prompt, or WSL. No other tools are needed. Docker Desktop should be using its default (WSL 2) engine.
+Step 3 walks you through the demos one step at a time. After each step it pauses so you can read it: **press Enter to continue, `a` to run the rest without pausing, or `q` to quit**. Each step shows the SQL++ or SDK call next to its results, row counts, timings, and a one-line "why this matters". If there is no keyboard attached (for example in CI) it runs straight through.
 
 ### Run one demo at a time
 
@@ -41,7 +41,37 @@ docker compose run --rm app python search_demo.py      # Demo 2: Full Text Searc
 docker compose run --rm app python vector_demo.py      # Demo 3: Vector search
 ```
 
-The demo source is in [`app/`](app/) and is written as teaching material. Open the files, change a query, and run it again. Your edits take effect immediately, with no rebuild.
+Options (they work with every demo, and with `docker compose run --rm app`):
+
+| Option | What it does |
+|---|---|
+| `--show-code` | Print the Python source of each step before it runs, so you see exactly what executes |
+| `--list` | List the step names |
+| `--only STEP` | Run just that step (repeatable), e.g. `--only kv-get --only sql-join` |
+| `--no-pause` | Do not wait for Enter between steps |
+| `--rows N` | Rows shown per table (default 5) |
+
+The demo source is in [`app/`](app/) and is written as teaching material: each step is one short function that calls Couchbase and returns what it found. Open the files, change a query, and run it again. Your edits take effect immediately, with no rebuild.
+
+### Go deeper
+
+For when you want numbers, plans and internals rather than a walkthrough:
+
+```bash
+# Which indexes does a query use?  (shows the query plan)
+docker compose run --rm app python deepdive.py explain 'SELECT name FROM `travel-sample`.inventory.airline WHERE country = "France"'
+
+# Latency percentiles (p50 / p95 / p99) for KV, SQL++, Search and vector operations
+docker compose run --rm app python deepdive.py bench --runs 200
+
+# How close are the approximate vector indexes to the exact answer?
+docker compose run --rm app python deepdive.py recall --k 10
+
+# An interactive SQL++ shell
+docker compose exec couchbase cbq -u Administrator -p password123
+```
+
+`bench` states its conditions (single node, one client thread, same machine): it shows the cost of one round trip, not production throughput. `recall` compares each vector index with a brute-force search over every embedding.
 
 ---
 
@@ -96,6 +126,14 @@ init/indexes.n1ql      SQL++ index definitions
 init/search/*.json     Full Text Search index definition
 init/vector/           vector index definitions
 app/                   the demos (Python, Couchbase SDK 4.x)
+  kv_and_queries.py      Demo 1: one function per step
+  search_demo.py         Demo 2
+  vector_demo.py         Demo 3
+  deepdive.py            explain / bench / recall
+  embeddings.py          the one place text becomes a vector (swap in OpenAI, Bedrock, ...)
+  embed.py               one-time step: embeddings and vector indexes
+  framework.py, terminal.py, cli.py, client.py, config.py, timing.py   shared plumbing
+  tests/                 unit tests (python -m unittest discover -s tests -t .)
 docs/run-locally.md    run the demos against any cluster, e.g. Couchbase Capella
 ```
 
