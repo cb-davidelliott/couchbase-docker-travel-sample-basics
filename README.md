@@ -18,7 +18,7 @@ Everything runs in containers, so it behaves the same on **macOS (Intel and Appl
 
 ```bash
 # 1. Get the demo
-git clone https://github.com/<org>/couchbase-docker-travel-sample-basics.git
+git clone https://github.com/cb-davidelliott/couchbase-docker-travel-sample-basics.git
 cd couchbase-docker-travel-sample-basics
 
 # 2. Start Couchbase, load the data, build the indexes, create embeddings, start the web UI
