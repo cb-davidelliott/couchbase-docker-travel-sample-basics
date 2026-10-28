@@ -8,6 +8,7 @@ Started by the `web` service in docker-compose.yml:   streamlit run web_ui.py
 
 import html
 import os
+from datetime import date
 from pathlib import Path
 
 import streamlit as st
@@ -27,10 +28,13 @@ EXAMPLE_QUESTIONS = (
     "cheap hostel for backpackers near the city centre",
 )
 
-# The Couchbase logo, stored in the repo so the page needs no internet access to show it.
-ICON = Path(__file__).parent / "assets" / "couchbase-favicon.svg"
+# The Couchbase logo and tab icon, stored in the repo so the page needs no internet access.
+ASSETS = Path(__file__).parent / "assets"
 
-st.set_page_config(page_title="Couchbase demo", page_icon=str(ICON), layout="wide")
+st.set_page_config(
+    page_title="Couchbase demo", page_icon=str(ASSETS / "couchbase-favicon.svg"), layout="wide"
+)
+st.logo(str(ASSETS / "couchbase-logo.svg"), size="large", link="https://www.couchbase.com")
 
 
 def code_version() -> str:
@@ -195,6 +199,21 @@ def show_playground(ctx: Context) -> None:
         st.code(function_source(playground.compare), language="python")
 
 
+# --------------------------------------------------------------------------------- footer
+def show_footer() -> None:
+    """Notices: the trademark line (wording from couchbase.com) and the server edition terms."""
+    st.divider()
+    st.caption(
+        f"© {date.today().year} Couchbase, Inc. Couchbase, the Couchbase logo and Couchbase. "
+        "The Operational Data Platform for AI. are registered trademarks of Couchbase, Inc. "
+        "All rights reserved."
+    )
+    st.caption(
+        "This demo runs Couchbase Server Enterprise Edition, which is free for development and "
+        "testing. A paid subscription is required for production."
+    )
+
+
 # ---------------------------------------------------------------------------------- page
 def main() -> None:
     st.session_state.setdefault("outcomes", {})
@@ -216,6 +235,7 @@ def main() -> None:
         show_tour(ctx)
     with playground_tab:
         show_playground(ctx)
+    show_footer()
 
 
 main()

@@ -131,6 +131,29 @@ app         the command-line demos - run on demand with `docker compose run --rm
 - **Security / least privilege:** the demos never log in as the administrator. They use a user called `demo` whose roles are limited to the `travel-sample` bucket (`data_reader`, `data_writer`, `query_select`, `fts_searcher`). See [`init/setup.sh`](init/setup.sh).
 - **Embeddings:** all 917 hotels are embedded using the open-source model `all-MiniLM-L6-v2` (384 dimensions), run locally by [fastembed](https://github.com/qdrant/fastembed). The model is built into the Docker image, so no download happens at demo time. Embedding takes under a minute. The vectors are stored in each hotel document in a field named `embedding`.
 
+### Branding
+
+The web UI uses the Couchbase logo and a light touch of the brand: Couchbase Red, Inter for text, and rounded corners. The theme is a few lines in [`app/.streamlit/config.toml`](app/.streamlit/config.toml). The Inter font (SIL Open Font License) is bundled in `app/static/` with its license, so the page needs no internet access. The Couchbase logo files in `app/assets/` are Couchbase trademarks.
+
+### Notices
+
+Couchbase, the Couchbase logo and Couchbase. The Operational Data Platform for AI. are registered trademarks of Couchbase, Inc.
+
+This project uses these third-party components, each under its own license:
+
+| Component | License |
+|---|---|
+| Couchbase Python SDK | Apache-2.0 |
+| Streamlit | Apache-2.0 |
+| fastembed | Apache-2.0 |
+| `all-MiniLM-L6-v2` embedding model (ONNX build by Qdrant) | Apache-2.0 |
+| Inter typeface (bundled in `app/static/`, license alongside) | SIL Open Font License 1.1 |
+| NumPy | BSD-3-Clause |
+| Rich | MIT |
+| Requests | Apache-2.0 |
+
+Couchbase Server Enterprise Edition is used under Couchbase's license terms (see [Versions](#versions)).
+
 ### Repository layout
 
 ```
@@ -226,4 +249,4 @@ The demo files can also run against any Couchbase cluster, for example a free [C
 
 Pinned in [`.env`](.env): Couchbase Server `enterprise-8.0.3`, Couchbase Python SDK `4.6.4`, fastembed `0.9.1`, Python `3.12`.
 
-Couchbase Server Enterprise Edition is free to use for development and evaluation. See the [Couchbase licensing information](https://www.couchbase.com/) for production use.
+This demo runs Couchbase Server Enterprise Edition. Per the Docker Hub image page, the Enterprise Edition license is free for development and testing; a paid subscription is required for production. See [Couchbase Server editions](https://www.couchbase.com/products/editions/) for the terms.

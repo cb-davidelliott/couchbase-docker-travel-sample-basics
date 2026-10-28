@@ -2,6 +2,7 @@
 headless = true
 address = "0.0.0.0"   # inside the container; docker-compose.yml only publishes it on 127.0.0.1
 port = 8501
+enableStaticServing = true   # serves the ./static folder (the Inter font files)
 
 [browser]
 gatherUsageStats = false   # no telemetry
@@ -9,5 +10,26 @@ gatherUsageStats = false   # no telemetry
 [client]
 toolbarMode = "minimal"
 
+# A light touch of the Couchbase brand: Couchbase Red for buttons and links, black text on
+# white, warm cream panels, light-gray borders, rounded corners, and Inter for text.
+# Headings use Inter too: the brand's display typeface (Centra No. 2) is a commercial font,
+# so it is not bundled here. To use it, add a woff2 file to static/, declare it in a
+# [[theme.fontFaces]] table below, and set headingFont.
 [theme]
-primaryColor = "#EA2328"
+base = "light"
+primaryColor = "#EC1218"                # Couchbase Red
+textColor = "#000000"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FFF0DA"    # Cream
+linkColor = "#EC1218"
+borderColor = "#D2D5D9"                 # Light Gray
+baseRadius = "10px"
+font = "Inter, sans-serif"
+
+# Inter (SIL Open Font License, see static/INTER-LICENSE.txt), served from this repo so the
+# page needs no internet access.
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/inter-latin-wght-normal.woff2"
+weight = "100 900"
+style = "normal"
