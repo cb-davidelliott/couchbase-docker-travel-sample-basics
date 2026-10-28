@@ -27,7 +27,10 @@ EXAMPLE_QUESTIONS = (
     "cheap hostel for backpackers near the city centre",
 )
 
-st.set_page_config(page_title="Couchbase demo", page_icon="🔴", layout="wide")
+# The Couchbase logo, stored in the repo so the page needs no internet access to show it.
+ICON = Path(__file__).parent / "assets" / "couchbase-favicon.svg"
+
+st.set_page_config(page_title="Couchbase demo", page_icon=str(ICON), layout="wide")
 
 
 def code_version() -> str:

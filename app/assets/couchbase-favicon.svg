@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The current Couchbase logo mark, taken from the site header at https://www.couchbase.com/ (Couchbase trademark). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 270.96 270.96">
+  <circle cx="135.48" cy="135.48" r="135.48" fill="#EC1218"/>
+  <path fill="#FFFFFF" d="M54.17,102.96h32.52v32.52h97.57v-32.52h32.52v65.05H54.17v-65.05Z"/>
+</svg>
