@@ -35,6 +35,15 @@ class FunctionSourceTest(unittest.TestCase):
         self.assertEqual([s.id for s in demo.steps], ["a", "b"])
         self.assertIs(demo.steps[0].func, a)
 
+    def test_source_is_captured_when_the_step_is_defined(self):
+        demo = Demo(title="t", script="t.py")
+
+        @demo.step("a", "A", section="S", why="w")
+        def a(ctx):
+            return Result()
+
+        self.assertTrue(demo.steps[0].source.startswith("def a(ctx):"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -119,10 +119,10 @@ class TerminalRunner:
         if self.options.show_code:
             self.console.print("  [dim]Code that runs:[/dim]")
             self.console.print(
-                Syntax(step.source(), "python", theme=THEME, word_wrap=True, padding=(0, 2))
+                Syntax(step.source, "python", theme=THEME, word_wrap=True, padding=(0, 2))
             )
         try:
-            result = step.func(ctx)
+            result = step.run(ctx)
         except Exception as exc:
             self.console.print(
                 Panel(f"{type(exc).__name__}: {exc}", title=f"Step failed: {step.id}", style="red")
@@ -138,6 +138,8 @@ class TerminalRunner:
 
     def _show(self, result: Result) -> None:
         console = self.console
+        if result.statement and result.statement_label:
+            console.print(f"  [dim]{result.statement_label}[/dim]")
         if result.statement:
             console.print(
                 Syntax(

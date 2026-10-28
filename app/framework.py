@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING, Any
 
 from couchbase.cluster import Cluster
 
-from client import run_sqlpp
 from config import Settings
+from timing import Stopwatch
 
 if TYPE_CHECKING:
     from couchbase.scope import Scope
@@ -40,14 +40,18 @@ class Result:
     Couchbase Search returns it.
     """
 
-    statement: str | None = None  # the SQL++ (or SDK call) that was run
-    language: str = "sql"  # "sql" or "python", used to colour `statement`
+    statement: str | None = None  # the SQL++ statement or Search request that was run
+    language: str = "sql"  # "sql" or "json", used to colour `statement`
+    statement_label: str = ""  # a short caption for `statement`, when it needs one
     parameters: dict[str, Any] | None = None  # parameters to show next to the statement
     tables: list[Table] = field(default_factory=list)
     documents: dict[str, dict[str, Any]] = field(default_factory=dict)  # label -> JSON document
     lines: list[str] = field(default_factory=list)
     timings: dict[str, float] = field(default_factory=dict)  # label -> milliseconds
     side_by_side: bool = False  # show the tables next to each other instead of stacked
+    # True when the step makes a single Couchbase call, so the time of the whole step is that
+    # call's round trip. Step.run then adds it to `timings`.
+    single_call: bool = False
 
 
 @dataclass
@@ -74,32 +78,6 @@ class Context:
         self.cluster.bucket(self.settings.bucket).ping()
         self.scope.collection("airline").exists("airline_10")
 
-    def sqlpp(
-        self,
-        statement: str,
-        parameters: dict[str, Any] | None = None,
-        *,
-        columns: list[str] | None = None,
-        display_parameters: dict[str, Any] | None = None,
-    ) -> Result:
-        """Run a SQL++ statement and package its rows and timings as a Result.
-
-        `columns` sets the column order (Couchbase returns JSON keys alphabetically).
-        `display_parameters` lets a step show a short stand-in for a huge parameter,
-        such as a 384-number vector, while still sending the real value.
-        """
-        statement = textwrap.dedent(statement).strip()
-        outcome = run_sqlpp(self.cluster, statement, parameters)
-        rows = outcome.rows
-        if columns:
-            rows = [{c: row.get(c) for c in columns} for row in rows]
-        return Result(
-            statement=statement,
-            parameters=display_parameters or parameters,
-            tables=[Table(rows)],
-            timings={"server": outcome.server_ms, "round trip": outcome.round_trip_ms},
-        )
-
 
 StepFunction = Callable[[Context], Result]
 
@@ -118,9 +96,17 @@ class Step:
     section: str
     why: str  # one line on why this matters
     func: StepFunction
+    # The source, captured when the step is defined, so "Show code" can never show something
+    # different from the function that runs (even if the file is edited afterwards).
+    source: str
 
-    def source(self) -> str:
-        return function_source(self.func)
+    def run(self, ctx: Context) -> Result:
+        """Run the step. A step that makes one Couchbase call also gets its round-trip time."""
+        with Stopwatch() as sw:
+            result = self.func(ctx)
+        if result.single_call:
+            result.timings["round trip"] = sw.ms
+        return result
 
 
 @dataclass
@@ -136,7 +122,7 @@ class Demo:
         """Decorator that adds a function to this demo as a step."""
 
         def register(func: StepFunction) -> StepFunction:
-            self.steps.append(Step(id, title, section, why, func))
+            self.steps.append(Step(id, title, section, why, func, function_source(func)))
             return func
 
         return register

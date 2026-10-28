@@ -7,17 +7,20 @@ Couchbase gives you two ways to work with the same JSON documents:
   2. SQL++ (also called N1QL): the SQL you already know, extended for JSON. Use it
      to search, filter, join and aggregate across documents.
 
-Each step below is a short function that talks to Couchbase with the Python SDK 4.x
-and returns what it found. Read it top to bottom.
+Each step below is a short function using the Couchbase Python SDK 4.x: the SDK call
+is the code you would write in your own application. `from_query` only formats the
+result for display; it never talks to Couchbase.
 
     docker compose run --rm app python kv_and_queries.py
 """
 
 import couchbase.subdocument as SD
 from couchbase.exceptions import DocumentNotFoundException
+from couchbase.options import QueryOptions
 
 from cli import run
 from framework import Context, Demo, Result
+from results import from_query
 from timing import Stopwatch
 
 KV = "Part 1 · Key-Value operations"
@@ -135,15 +138,15 @@ def kv_remove(ctx: Context) -> Result:
     "during setup, keeps this fast.",
 )
 def sql_filter(ctx: Context) -> Result:
-    return ctx.sqlpp(
-        f"""
+    statement = f"""
         SELECT name, iata, callsign
         FROM {ctx.keyspace("airline")}
         WHERE country = "United States"
         ORDER BY name
-        LIMIT 10""",
-        columns=["name", "iata", "callsign"],
-    )
+        LIMIT 10"""
+    # metrics=True asks the server to report how long it spent on the statement.
+    result = ctx.cluster.query(statement, QueryOptions(metrics=True))
+    return from_query(statement, result, columns=["name", "iata", "callsign"])
 
 
 @DEMO.step(
@@ -154,14 +157,15 @@ def sql_filter(ctx: Context) -> Result:
     "injection, and let the server reuse the query plan.",
 )
 def sql_params(ctx: Context) -> Result:
-    return ctx.sqlpp(
-        f"""
+    statement = f"""
         SELECT airportname, city, country, faa
         FROM {ctx.keyspace("airport")}
         WHERE country = $country AND city = $city
-        ORDER BY airportname""",
-        {"country": "United States", "city": "San Francisco"},
-        columns=["airportname", "city", "country", "faa"],
+        ORDER BY airportname"""
+    parameters = {"country": "United States", "city": "San Francisco"}
+    result = ctx.cluster.query(statement, QueryOptions(named_parameters=parameters, metrics=True))
+    return from_query(
+        statement, result, parameters=parameters, columns=["airportname", "city", "country", "faa"]
     )
 
 
@@ -173,16 +177,15 @@ def sql_params(ctx: Context) -> Result:
     "separate analytics copy of the data.",
 )
 def sql_group_by(ctx: Context) -> Result:
-    return ctx.sqlpp(
-        f"""
+    statement = f"""
         SELECT country, city, COUNT(*) AS hotels
         FROM {ctx.keyspace("hotel")}
         WHERE city IS NOT NULL
         GROUP BY country, city
         ORDER BY hotels DESC
-        LIMIT 8""",
-        columns=["country", "city", "hotels"],
-    )
+        LIMIT 8"""
+    result = ctx.cluster.query(statement, QueryOptions(metrics=True))
+    return from_query(statement, result, columns=["country", "city", "hotels"])
 
 
 @DEMO.step(
@@ -193,16 +196,15 @@ def sql_group_by(ctx: Context) -> Result:
     "the same fast path as a KV get, so data stays normalized without a read-time penalty.",
 )
 def sql_join(ctx: Context) -> Result:
-    return ctx.sqlpp(
-        f"""
+    statement = f"""
         SELECT a.name AS airline, r.sourceairport AS `from`, r.destinationairport AS `to`, r.stops
         FROM {ctx.keyspace("route")} AS r
         JOIN {ctx.keyspace("airline")} AS a ON KEYS r.airlineid
         WHERE r.sourceairport = "SFO"
         ORDER BY a.name, r.destinationairport
-        LIMIT 10""",
-        columns=["airline", "from", "to", "stops"],
-    )
+        LIMIT 10"""
+    result = ctx.cluster.query(statement, QueryOptions(metrics=True))
+    return from_query(statement, result, columns=["airline", "from", "to", "stops"])
 
 
 @DEMO.step(
@@ -213,8 +215,7 @@ def sql_join(ctx: Context) -> Result:
     "into rows, so nested data can be aggregated without splitting it into more tables.",
 )
 def sql_unnest(ctx: Context) -> Result:
-    return ctx.sqlpp(
-        f"""
+    statement = f"""
         SELECT h.name, h.city, COUNT(*) AS reviews, ROUND(AVG(r.ratings.Overall), 2) AS avg_rating
         FROM {ctx.keyspace("hotel")} AS h
         UNNEST h.reviews AS r
@@ -222,9 +223,9 @@ def sql_unnest(ctx: Context) -> Result:
         GROUP BY h.name, h.city
         HAVING COUNT(*) >= 5
         ORDER BY avg_rating DESC, reviews DESC
-        LIMIT 8""",
-        columns=["name", "city", "reviews", "avg_rating"],
-    )
+        LIMIT 8"""
+    result = ctx.cluster.query(statement, QueryOptions(metrics=True))
+    return from_query(statement, result, columns=["name", "city", "reviews", "avg_rating"])
 
 
 @DEMO.step(
@@ -235,8 +236,7 @@ def sql_unnest(ctx: Context) -> Result:
     "or filters arrays in place.",
 )
 def sql_let_array(ctx: Context) -> Result:
-    return ctx.sqlpp(
-        f"""
+    statement = f"""
         SELECT h.name, h.city, avg_rating, ARRAY_LENGTH(h.reviews) AS reviews
         FROM {ctx.keyspace("hotel")} AS h
         LET ratings    = ARRAY r.ratings.Overall FOR r IN h.reviews
@@ -244,9 +244,9 @@ def sql_let_array(ctx: Context) -> Result:
             avg_rating = ROUND(ARRAY_AVG(ratings), 2)
         WHERE h.country = "France" AND ARRAY_LENGTH(ratings) >= 3
         ORDER BY avg_rating DESC
-        LIMIT 5""",
-        columns=["name", "city", "avg_rating", "reviews"],
-    )
+        LIMIT 5"""
+    result = ctx.cluster.query(statement, QueryOptions(metrics=True))
+    return from_query(statement, result, columns=["name", "city", "avg_rating", "reviews"])
 
 
 if __name__ == "__main__":

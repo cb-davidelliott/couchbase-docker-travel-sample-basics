@@ -8,6 +8,7 @@ Started by the `web` service in docker-compose.yml:   streamlit run web_ui.py
 
 import html
 import os
+from pathlib import Path
 
 import streamlit as st
 
@@ -29,6 +30,17 @@ EXAMPLE_QUESTIONS = (
 st.set_page_config(page_title="Couchbase demo", page_icon="🔴", layout="wide")
 
 
+def code_version() -> str:
+    """Changes whenever a source file in this folder is edited."""
+    return str(max(path.stat().st_mtime_ns for path in Path(__file__).parent.glob("*.py")))
+
+
+@st.cache_resource
+def started_with() -> str:
+    """The code version when this server process started (remembered for the process)."""
+    return code_version()
+
+
 @st.cache_resource(show_spinner="Connecting to Couchbase...")
 def get_context() -> Context:
     """One connection (and one loaded embedding model) shared by every browser session."""
@@ -44,7 +56,7 @@ def run_steps(ctx: Context, steps: list[Step]) -> None:
     """Button callback: run steps and remember what each returned (or the error it raised)."""
     for step in steps:
         try:
-            st.session_state.outcomes[step.id] = step.func(ctx)
+            st.session_state.outcomes[step.id] = step.run(ctx)
         except Exception as exc:  # shown to the viewer next to the step
             st.session_state.outcomes[step.id] = exc
 
@@ -56,6 +68,8 @@ def show_text(line: str) -> None:
 
 
 def show_result(result: Result) -> None:
+    if result.statement_label:
+        st.caption(result.statement_label)
     if result.statement:
         st.code(result.statement, language=result.language, wrap_lines=True)
     if result.parameters:
@@ -98,7 +112,7 @@ def show_step(ctx: Context, demo: Demo, number: int, step: Step) -> None:
         run_column, code_column = st.columns([1, 5])
         run_column.button("▶ Run", key=f"run:{step.id}", on_click=run_steps, args=(ctx, [step]))
         if code_column.toggle("Show code", key=f"code:{step.id}"):
-            st.code(step.source(), language="python")
+            st.code(step.source, language="python")
 
         outcome = st.session_state.outcomes.get(step.id)
         if isinstance(outcome, Exception):
@@ -188,6 +202,11 @@ def main() -> None:
         f"Live against your local cluster. The Couchbase web console is at {CONSOLE_URL} "
         "(Administrator / password123)."
     )
+    if code_version() != started_with():
+        st.warning(
+            "The code changed after this page started, so it is still showing and running the "
+            "old version. Restart the UI to pick up your edits: `docker compose restart web`"
+        )
     ctx = get_context()
     tour, playground_tab = st.tabs(["Guided tour", "Playground"])
     with tour:

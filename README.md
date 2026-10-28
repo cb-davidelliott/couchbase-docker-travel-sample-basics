@@ -35,7 +35,7 @@ Step 2 takes a few minutes the first time, mostly downloading about 4 GB of imag
 Use either one, or both at the same time. They run the same steps against the same cluster.
 
 **In your browser: <http://localhost:8501>**
-- **Guided tour:** pick a demo, then press **▶ Run** on any step (or **Run all steps**). Each step shows the SQL++ or SDK call, the results, and the timings. Switch on **Show code** to see the exact Python that runs, and open **Run this step in a terminal** for the equivalent command.
+- **Guided tour:** pick a demo, then press **▶ Run** on any step (or **Run all steps**). Each step shows the SQL++ statement or the Search request (the JSON sent to Couchbase), the results, and the timings. Switch on **Show code** to see the exact Python that runs, and open **Run this step in a terminal** for the equivalent command.
 - **Playground:** type a question in your own words, optionally add filters (country, pets, breakfast), and see **keyword search and vector search side by side**.
 
 **In your terminal:**
@@ -44,7 +44,7 @@ Use either one, or both at the same time. They run the same steps against the sa
 docker compose run --rm app
 ```
 
-This walks you through the demos one step at a time. After each step it pauses so you can read it: **press Enter to continue, `a` to run the rest without pausing, or `q` to quit**. Each step shows the SQL++ or SDK call next to its results, row counts, timings, and a one-line "why this matters". If there is no keyboard attached (for example in CI) it runs straight through.
+This walks you through the demos one step at a time. After each step it pauses so you can read it: **press Enter to continue, `a` to run the rest without pausing, or `q` to quit**. Each step shows the SQL++ statement or Search request next to its results, row counts, timings, and a one-line "why this matters". If there is no keyboard attached (for example in CI) it runs straight through.
 
 ### Run one demo at a time
 
@@ -64,7 +64,7 @@ Options (they work with every demo, and with `docker compose run --rm app`):
 | `--no-pause` | Do not wait for Enter between steps |
 | `--rows N` | Rows shown per table (default 5) |
 
-The demo source is in [`app/`](app/) and is written as teaching material: each step is one short function that calls Couchbase and returns what it found. Open the files, change a query, and run it again. Your edits take effect immediately, with no rebuild.
+The demo source is in [`app/`](app/) and is written as teaching material: each step is one short function that calls Couchbase and returns what it found. Open the files, change a query, and run it again. Your edits take effect immediately in the terminal demos, with no rebuild. The web UI keeps the code it started with, so after editing run `docker compose restart web` (the page tells you when it is out of date).
 
 ### Go deeper
 

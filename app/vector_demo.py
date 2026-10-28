@@ -15,15 +15,17 @@ Couchbase offers more than one vector index. This demo uses:
   * a Search (FTS) vector index: best when combining vectors with text and filters
   * GSI vector indexes (Composite and Hyperscale): queried with plain SQL++
 
+Each step is the SDK call you would write in your own application; `from_search` and
+`from_query` only format the result for display.
+
     docker compose run --rm app python vector_demo.py
 """
 
-from couchbase.options import SearchOptions
+from couchbase.options import QueryOptions, SearchOptions
 from couchbase.search import (
     BooleanFieldQuery,
     ConjunctionQuery,
     MatchQuery,
-    SearchQuery,
     SearchRequest,
     TermQuery,
 )
@@ -31,8 +33,10 @@ from couchbase.vector_search import VectorQuery, VectorSearch
 
 from cli import run
 from config import TEXT_INDEX, VECTOR_INDEX
+from display import request_json
 from embeddings import embed_text
-from framework import Context, Demo, Result, Table
+from framework import Context, Demo, Result
+from results import from_query, from_search, search_table
 from timing import Stopwatch
 
 EMBED = "Part 1 · Turning a question into a vector"
@@ -47,33 +51,6 @@ DEMO = Demo(
     script="vector_demo.py",
     subtitle="Local embedding model, no API key · Search and GSI vector indexes",
 )
-
-
-def nearest_hotels(
-    ctx: Context,
-    vector: list[float],
-    *,
-    k: int = 5,
-    prefilter: SearchQuery | None = None,
-    extra: tuple[str, ...] = (),
-) -> tuple[list[dict], float]:
-    """Ask the Search service for the k hotels nearest to `vector`.
-
-    An optional `prefilter` (any Search query) restricts which hotels are considered
-    BEFORE the nearest-neighbour search. Returns the rows and the round-trip time in ms.
-    """
-    query = VectorQuery("embedding", vector, num_candidates=k, prefilter=prefilter)
-    request = SearchRequest.create(VectorSearch.from_vector_query(query))
-    fields = ["name", "city", *extra]
-    with Stopwatch() as sw:
-        hits = list(ctx.scope.search(VECTOR_INDEX, request, SearchOptions(limit=k, fields=fields)))
-    # For a vector query the score is the cosine similarity: 1.0 means identical meaning.
-    rows = [{"similarity": round(h.score, 3), **{f: h.fields.get(f) for f in fields}} for h in hits]
-    return rows, sw.ms
-
-
-def hotel_label(name: str, city: str) -> str:
-    return f"{name} ({city})"
 
 
 @DEMO.step(
@@ -100,17 +77,15 @@ def embed_query(ctx: Context) -> Result:
     "Nearest hotels to the question (Search vector index)",
     section=SEMANTIC,
     why="Each embedding is stored in the hotel's own JSON document and indexed there, so "
-    "semantic search runs on operational data with no second database to keep in sync.",
+    "semantic search runs on operational data with no second database to keep in sync. "
+    "The score is cosine similarity: 1.0 means identical meaning.",
 )
 def nearest(ctx: Context) -> Result:
-    rows, ms = nearest_hotels(ctx, embed_text(QUESTION), extra=("country",))
-    return Result(
-        statement='VectorQuery("embedding", <384-number query vector>, num_candidates=5)',
-        language="python",
-        tables=[Table(rows)],
-        lines=["similarity: 1.0 = identical meaning (cosine similarity)"],
-        timings={"vector search": ms},
-    )
+    fields = ["name", "city", "country"]
+    query = VectorQuery("embedding", embed_text(QUESTION), num_candidates=5)
+    request = SearchRequest.create(VectorSearch.from_vector_query(query))
+    result = ctx.scope.search(VECTOR_INDEX, request, SearchOptions(limit=5, fields=fields))
+    return from_search(request_json(query), result, fields=fields, score_label="similarity")
 
 
 @DEMO.step(
@@ -122,40 +97,27 @@ def nearest(ctx: Context) -> Result:
     "so some results are only loosely related; larger hosted models are sharper.",
 )
 def keyword_vs_vector(ctx: Context) -> Result:
+    fields = ["name", "description"]
+    options = SearchOptions(limit=5, fields=fields)
+    vector_query = VectorQuery("embedding", embed_text(QUESTION), num_candidates=5)
+
     with Stopwatch() as keyword_time:
         keyword = ctx.scope.search(
-            TEXT_INDEX,
-            SearchRequest.create(MatchQuery(QUESTION, field="description")),
-            SearchOptions(limit=5, fields=["name", "city", "description"]),
+            TEXT_INDEX, SearchRequest.create(MatchQuery(QUESTION, field="description")), options
         )
-        keyword_hits = list(keyword)
-    vector_rows, vector_ms = nearest_hotels(ctx, embed_text(QUESTION), extra=("description",))
+        keyword_table = search_table(keyword, fields, title="Keyword search")
+    with Stopwatch() as vector_time:
+        vector = ctx.scope.search(
+            VECTOR_INDEX,
+            SearchRequest.create(VectorSearch.from_vector_query(vector_query)),
+            options,
+        )
+        vector_table = search_table(vector, fields, title="Vector search", score_label="similarity")
 
     return Result(
-        tables=[
-            Table(
-                [
-                    {
-                        "hotel": hotel_label(h.fields["name"], h.fields["city"]),
-                        "description": h.fields.get("description"),
-                    }
-                    for h in keyword_hits
-                ],
-                title=f"Keyword search ({keyword_time.ms:.0f} ms)",
-                total=keyword.metadata().metrics().total_rows(),
-            ),
-            Table(
-                [
-                    {
-                        "hotel": hotel_label(r["name"], r["city"]),
-                        "description": r["description"],
-                    }
-                    for r in vector_rows
-                ],
-                title=f"Vector search ({vector_ms:.0f} ms)",
-            ),
-        ],
+        tables=[keyword_table, vector_table],
         side_by_side=True,
+        timings={"keyword search": keyword_time.ms, "vector search": vector_time.ms},
     )
 
 
@@ -168,38 +130,15 @@ def keyword_vs_vector(ctx: Context) -> Result:
     "a full set of results that satisfy it.",
 )
 def filtered_vector(ctx: Context) -> Result:
+    fields = ["name", "city", "pets_ok"]
     prefilter = ConjunctionQuery(
         TermQuery("United States", field="country"),
         BooleanFieldQuery(True, field="pets_ok"),
     )
-    rows, ms = nearest_hotels(ctx, embed_text(QUESTION), prefilter=prefilter, extra=("pets_ok",))
-    return Result(
-        statement=(
-            'VectorQuery("embedding", <query vector>, prefilter=ConjunctionQuery(\n'
-            '    TermQuery("United States", field="country"),\n'
-            '    BooleanFieldQuery(True, field="pets_ok")))'
-        ),
-        language="python",
-        tables=[Table(rows)],
-        timings={"filtered vector search": ms},
-    )
-
-
-def vector_sqlpp(ctx: Context, index: str) -> Result:
-    """SQL++ vector query pinned to one GSI vector index, so the two can be compared."""
-    vector = embed_text(QUESTION)
-    return ctx.sqlpp(
-        f"""
-        SELECT h.name, h.city,
-               ROUND(1 - APPROX_VECTOR_DISTANCE(h.embedding, $qvec, "COSINE"), 3) AS similarity
-        FROM {ctx.keyspace("hotel")} AS h USE INDEX ({index} USING GSI)
-        WHERE h.country = "United States" AND h.pets_ok = true
-        ORDER BY APPROX_VECTOR_DISTANCE(h.embedding, $qvec, "COSINE")
-        LIMIT 5""",
-        {"qvec": vector},
-        columns=["name", "city", "similarity"],
-        display_parameters={"qvec": f"[{len(vector)}-number query vector]"},
-    )
+    query = VectorQuery("embedding", embed_text(QUESTION), num_candidates=5, prefilter=prefilter)
+    request = SearchRequest.create(VectorSearch.from_vector_query(query))
+    result = ctx.scope.search(VECTOR_INDEX, request, SearchOptions(limit=5, fields=fields))
+    return from_search(request_json(query), result, fields=fields, score_label="similarity")
 
 
 @DEMO.step(
@@ -212,7 +151,22 @@ def vector_sqlpp(ctx: Context, index: str) -> Result:
     "is the similarity shown above.)",
 )
 def sqlpp_composite(ctx: Context) -> Result:
-    return vector_sqlpp(ctx, "idx_hotel_composite")
+    statement = f"""
+        SELECT h.name, h.city,
+               ROUND(1 - APPROX_VECTOR_DISTANCE(h.embedding, $qvec, "COSINE"), 3) AS similarity
+        FROM {ctx.keyspace("hotel")} AS h USE INDEX (idx_hotel_composite USING GSI)
+        WHERE h.country = "United States" AND h.pets_ok = true
+        ORDER BY APPROX_VECTOR_DISTANCE(h.embedding, $qvec, "COSINE")
+        LIMIT 5"""
+    vector = embed_text(QUESTION)
+    options = QueryOptions(named_parameters={"qvec": vector}, metrics=True)
+    result = ctx.cluster.query(statement, options)
+    return from_query(
+        statement,
+        result,
+        parameters={"qvec": f"[{len(vector)}-number query vector]"},
+        columns=["name", "city", "similarity"],
+    )
 
 
 @DEMO.step(
@@ -223,7 +177,22 @@ def sqlpp_composite(ctx: Context) -> Result:
     "same results here; the choice between the two matters at scale.",
 )
 def sqlpp_hyperscale(ctx: Context) -> Result:
-    return vector_sqlpp(ctx, "idx_hotel_hyperscale")
+    statement = f"""
+        SELECT h.name, h.city,
+               ROUND(1 - APPROX_VECTOR_DISTANCE(h.embedding, $qvec, "COSINE"), 3) AS similarity
+        FROM {ctx.keyspace("hotel")} AS h USE INDEX (idx_hotel_hyperscale USING GSI)
+        WHERE h.country = "United States" AND h.pets_ok = true
+        ORDER BY APPROX_VECTOR_DISTANCE(h.embedding, $qvec, "COSINE")
+        LIMIT 5"""
+    vector = embed_text(QUESTION)
+    options = QueryOptions(named_parameters={"qvec": vector}, metrics=True)
+    result = ctx.cluster.query(statement, options)
+    return from_query(
+        statement,
+        result,
+        parameters={"qvec": f"[{len(vector)}-number query vector]"},
+        columns=["name", "city", "similarity"],
+    )
 
 
 if __name__ == "__main__":

@@ -1,17 +1,14 @@
-"""Connecting to Couchbase and running SQL++ with timing."""
+"""Connecting to Couchbase."""
 
 import logging
 import time
-from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
 
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
-from couchbase.options import ClusterOptions, ClusterTimeoutOptions, QueryOptions
+from couchbase.options import ClusterOptions, ClusterTimeoutOptions
 
 from config import Settings
-from timing import Stopwatch
 
 log = logging.getLogger(__name__)
 
@@ -44,25 +41,3 @@ def connect(settings: Settings, credentials: tuple[str, str] | None = None) -> C
             log.warning("Could not connect yet (attempt %d/%d)", attempt, CONNECT_ATTEMPTS)
             time.sleep(3)
     raise SystemExit(f"Could not connect to Couchbase at {settings.connstr}: {last_error}")
-
-
-@dataclass(frozen=True)
-class QueryOutcome:
-    """The rows of a SQL++ query and how long it took."""
-
-    rows: list[dict[str, Any]]
-    server_ms: float  # time the Query service spent executing the statement
-    round_trip_ms: float  # total time seen by this application, network included
-
-
-def run_sqlpp(
-    cluster: Cluster, statement: str, parameters: dict[str, Any] | None = None
-) -> QueryOutcome:
-    """Run a SQL++ statement with named parameters and return its rows with timings."""
-    # metrics=True asks the server to report how long it spent on the statement.
-    options = QueryOptions(named_parameters=parameters or {}, metrics=True)
-    with Stopwatch() as sw:
-        result = cluster.query(statement, options)
-        rows = list(result)
-    server_ms = result.metadata().metrics().execution_time().total_seconds() * 1000
-    return QueryOutcome(rows, server_ms, sw.ms)
