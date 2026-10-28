@@ -7,7 +7,7 @@ from framework import Demo, Result
 
 
 def make_demo() -> Demo:
-    demo = Demo(title="Demo")
+    demo = Demo(title="Demo", script="demo.py")
     demo.step("one", "First step", section="S", why="w")(lambda ctx: Result())
     return demo
 

@@ -18,11 +18,13 @@ WORKDIR /app
 #   couchbase  - the Couchbase Python SDK 4.x
 #   fastembed  - small, fast, local embedding models (ONNX; no API key needed)
 #   rich       - readable, colourful console output
+#   streamlit  - the web UI
 RUN pip install \
       "couchbase==${COUCHBASE_SDK_VERSION}" \
       "fastembed==${FASTEMBED_VERSION}" \
       "numpy==2.5.4" \
       "rich==14.2.0" \
+      "streamlit==1.65.0" \
       "requests==2.32.5"
 
 # Download the embedding model NOW, while building the image, so the demos

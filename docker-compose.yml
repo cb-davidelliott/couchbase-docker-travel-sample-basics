@@ -75,7 +75,28 @@ services:
       - ./init:/init:ro
     restart: "no"
 
-  # The demos. Not started by `up` (it belongs to the "demo" profile); run it
+  # The guided web UI, at http://localhost:${CB_PORT_WEB}. It runs the same steps as the
+  # command-line demos. Published on localhost only.
+  web:
+    image: couchbase-travel-sample-demo-app
+    depends_on:
+      embed:
+        condition: service_healthy
+    env_file: .env
+    working_dir: /app
+    command: ["streamlit", "run", "web_ui.py"]
+    ports:
+      - "127.0.0.1:${CB_PORT_WEB}:8501"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    volumes:
+      - ./app:/app:ro
+
+  # The command-line demos. Not started by `up` (it belongs to the "demo" profile); run it
   # with `docker compose run --rm app`. It waits for setup to finish first.
   app:
     profiles: ["demo"]

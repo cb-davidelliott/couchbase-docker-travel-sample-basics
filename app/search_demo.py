@@ -39,6 +39,7 @@ HIT_FIELDS = ("name", "city", "country")  # stored fields to return with each hi
 
 DEMO = Demo(
     title="Demo 2 · Full Text Search",
+    script="search_demo.py",
     subtitle=f"Language-aware search over hotel descriptions · index: {TEXT_INDEX}",
 )
 

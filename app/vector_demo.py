@@ -44,6 +44,7 @@ QUESTION = "quiet beachfront place good for families with young kids"
 
 DEMO = Demo(
     title="Demo 3 · Semantic (vector) search",
+    script="vector_demo.py",
     subtitle="Local embedding model, no API key · Search and GSI vector indexes",
 )
 

@@ -128,6 +128,7 @@ class Demo:
     """A named, ordered list of steps."""
 
     title: str
+    script: str  # the script that runs this demo, shown to people who want the command line
     subtitle: str = ""
     steps: list[Step] = field(default_factory=list)
 

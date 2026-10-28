@@ -5,7 +5,7 @@ from framework import Demo, Result, function_source
 
 class FunctionSourceTest(unittest.TestCase):
     def test_strips_decorators_and_keeps_the_body(self):
-        demo = Demo(title="t")
+        demo = Demo(title="t", script="t.py")
 
         @demo.step(
             "one",
@@ -22,7 +22,7 @@ class FunctionSourceTest(unittest.TestCase):
         self.assertNotIn("@demo.step", source)
 
     def test_step_decorator_registers_in_order(self):
-        demo = Demo(title="t")
+        demo = Demo(title="t", script="t.py")
 
         @demo.step("a", "A", section="S", why="w")
         def a(ctx):

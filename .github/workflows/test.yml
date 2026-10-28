@@ -60,6 +60,12 @@ jobs:
       - name: Start Couchbase, load data, build indexes, create embeddings
         run: docker compose up -d --wait
 
+      - name: Web UI is serving
+        run: curl -sf http://localhost:8501/_stcore/health
+
+      - name: Web UI integration test (every step of every demo, and the playground)
+        run: docker compose run --rm app python -m unittest discover -s integration -t .
+
       - name: Demo 1 - Key-Value and SQL++
         run: docker compose run --rm app python kv_and_queries.py
 

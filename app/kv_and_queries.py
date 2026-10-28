@@ -25,6 +25,7 @@ SQLPP = "Part 2 · SQL++ queries"
 
 DEMO = Demo(
     title="Demo 1 · Key-Value operations & SQL++ queries",
+    script="kv_and_queries.py",
     subtitle="Couchbase Python SDK 4.x · travel-sample data set",
 )
 

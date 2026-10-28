@@ -6,10 +6,8 @@ Each demo is also a standalone script, e.g.
 Accepts the same options as the individual demos (--no-pause, --show-code, --list, ...).
 """
 
+from catalog import DEMOS
 from cli import run
-from kv_and_queries import DEMO as KV_AND_QUERIES
-from search_demo import DEMO as SEARCH
-from vector_demo import DEMO as VECTOR
 
 if __name__ == "__main__":
-    raise SystemExit(run([KV_AND_QUERIES, SEARCH, VECTOR]))
+    raise SystemExit(run(DEMOS))
